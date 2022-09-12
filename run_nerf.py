@@ -58,7 +58,6 @@ def render_rays(ray_batch,
                 raw_noise_std=0.,
                 verbose=False):
     """Volumetric rendering.
-
     Args:
       ray_batch: array of shape [batch_size, ...]. All information necessary
         for sampling along a ray, including: ray origin, ray direction, min
@@ -77,7 +76,6 @@ def render_rays(ray_batch,
       white_bkgd: bool. If True, assume a white background.
       raw_noise_std: ...
       verbose: bool. If True, print more debugging info.
-
     Returns:
       rgb_map: [num_rays, 3]. Estimated RGB color of a ray. Comes from fine model.
       disp_map: [num_rays]. Disparity map. 1 / depth.
@@ -92,12 +90,10 @@ def render_rays(ray_batch,
 
     def raw2outputs(raw, z_vals, rays_d):
         """Transforms model's predictions to semantically meaningful values.
-
         Args:
           raw: [num_rays, num_samples along ray, 4]. Prediction from model.
           z_vals: [num_rays, num_samples along ray]. Integration time.
           rays_d: [num_rays, 3]. Direction of each ray.
-
         Returns:
           rgb_map: [num_rays, 3]. Estimated RGB color of a ray.
           disp_map: [num_rays]. Disparity map. Inverse of depth map.
@@ -263,7 +259,6 @@ def render(H, W, focal,
            use_viewdirs=False, c2w_staticcam=None,
            **kwargs):
     """Render rays
-
     Args:
       H: int. Height of image in pixels.
       W: int. Width of image in pixels.
@@ -279,7 +274,6 @@ def render(H, W, focal,
       use_viewdirs: bool. If True, use viewing direction of a point in space in model.
       c2w_staticcam: array of shape [3, 4]. If not None, use this transformation matrix for 
        camera while using other c2w argument for viewing directions.
-
     Returns:
       rgb_map: [batch_size, 3]. Predicted RGB values for rays.
       disp_map: [batch_size]. Disparity map. Inverse of depth.
@@ -519,7 +513,7 @@ def config_parser():
                         help='log2 of max freq for positional encoding (3D location)')
     parser.add_argument("--multires_views", type=int, default=4,
                         help='log2 of max freq for positional encoding (2D direction)')
-    parser.add_argument("--raw_noise_std", type=float, default=0.,
+    parser.add_argument("--raw_noise_std", type=float, default=1.0,
                         help='std dev of noise added to regularize sigma_a output, 1e0 recommended')
 
     parser.add_argument("--render_only", action='store_true',
@@ -566,7 +560,7 @@ def config_parser():
                         help='frequency of weight ckpt saving')
     parser.add_argument("--i_testset", type=int, default=50000,
                         help='frequency of testset saving')
-    parser.add_argument("--i_video",   type=int, default=50000,
+    parser.add_argument("--i_video",   type=int, default=5000,
                         help='frequency of render_poses video saving')
 
     return parser
@@ -585,6 +579,7 @@ def train():
     # Load data
 
     if args.dataset_type == 'llff':
+        print('Start loading llff data')
         images, poses, bds, render_poses, i_test = load_llff_data(args.datadir, args.factor,
                                                                   recenter=True, bd_factor=.75,
                                                                   spherify=args.spherify)
@@ -726,6 +721,7 @@ def train():
         print('get rays')
         # get_rays_np() returns rays_origin=[H, W, 3], rays_direction=[H, W, 3]
         # for each pixel in the image. This stack() adds a new dimension.
+        print(f'poses : {len(poses)}')
         rays = [get_rays_np(H, W, focal, p) for p in poses[:, :3, :4]]
         rays = np.stack(rays, axis=0)  # [N, ro+rd, H, W, 3]
         print('done, concats')
@@ -743,7 +739,7 @@ def train():
         print('done')
         i_batch = 0
 
-    N_iters = 1000000
+    N_iters = 100000
     print('Begin')
     print('TRAIN views are', i_train)
     print('TEST views are', i_test)
@@ -754,7 +750,7 @@ def train():
         os.path.join(basedir, 'summaries', expname))
     writer.set_as_default()
 
-    for i in range(start, N_iters):
+    for i in range(start, N_iters + 1):
         time0 = time.time()
 
         # Sample random ray batch
@@ -838,7 +834,7 @@ def train():
             np.save(path, net.get_weights())
             print('saved weights at', path)
 
-        if i % args.i_weights == 0:
+        if i % args.i_weights == 0 and i > 0:
             for k in models:
                 save_weights(models[k], k, i)
 
@@ -926,3 +922,5 @@ def train():
 
 if __name__ == '__main__':
     train()
+    
+    
